@@ -33,9 +33,6 @@ ${productContext}`;
         model: "gemini-3.6-flash",
         input: userMessage,
         system_instruction: systemInstruction,
-        generation_config: {
-          max_tokens: 80,
-        },
       }),
     }
   );
@@ -50,14 +47,37 @@ ${productContext}`;
 
   const data = await response.json();
 
-  const reply =
-    data?.output_text?.trim() ||
-    data?.steps
-      ?.find((step: any) => step.type === "model_output")
-      ?.content
-      ?.find((content: any) => content.type === "text")
-      ?.text
-      ?.trim();
+  let reply = "";
+
+  if (typeof data?.output_text === "string") {
+    reply = data.output_text.trim();
+  }
+
+  if (!reply && Array.isArray(data?.steps)) {
+    for (const step of data.steps) {
+      if (step?.type !== "model_output") {
+        continue;
+      }
+
+      if (!Array.isArray(step?.content)) {
+        continue;
+      }
+
+      for (const content of step.content) {
+        if (
+          content?.type === "text" &&
+          typeof content?.text === "string"
+        ) {
+          reply = content.text.trim();
+          break;
+        }
+      }
+
+      if (reply) {
+        break;
+      }
+    }
+  }
 
   if (!reply) {
     throw new Error("Gemini returned an empty response");
