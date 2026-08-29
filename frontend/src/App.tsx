@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 
-const API_URL = "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL;
 
 declare global {
   interface Window {
