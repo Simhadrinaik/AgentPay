@@ -8,7 +8,7 @@ export async function generateAgentResponse(
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  const prompt = `You are AgentPay, an AI shopping assistant.
+  const systemInstruction = `You are AgentPay, an AI shopping assistant.
 
 Rules:
 - Recommend ONLY products in the catalog.
@@ -19,32 +19,22 @@ Rules:
 - If multiple products match, compare them briefly.
 
 Catalog:
-${productContext}
-
-User request:
-${userMessage}`;
+${productContext}`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY,
       },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 80,
-          topP: 0.8,
+        model: "gemini-3.6-flash",
+        input: userMessage,
+        system_instruction: systemInstruction,
+        generation_config: {
+          max_total_tokens: 80,
         },
       }),
     }
@@ -61,7 +51,13 @@ ${userMessage}`;
   const data = await response.json();
 
   const reply =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    data?.output_text?.trim() ||
+    data?.steps
+      ?.find((step: any) => step.type === "model_output")
+      ?.content
+      ?.find((content: any) => content.type === "text")
+      ?.text
+      ?.trim();
 
   if (!reply) {
     throw new Error("Gemini returned an empty response");
