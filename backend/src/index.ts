@@ -3,11 +3,11 @@ import cors from "@fastify/cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
 
-import { products } from "./products";
+import { products } from "./products.js";
 import {
   generateAgentResponse,
   detectCartAction,
-} from "./ai";
+} from "./ai.js";
 
 import {
   addToCart,
@@ -15,17 +15,17 @@ import {
   removeFromCart,
   clearCart,
   getCart,
-} from "./cart";
+} from "./cart.js";
 
-import { razorpay } from "./payment";
-import { prisma } from "./prisma";
+import { razorpay } from "./payment.js";
+import { prisma } from "./prisma.js";
 
 import {
   registerUser,
   loginUser,
   getUserById,
   verifyAuthToken,
-} from "./auth";
+} from "./auth.js";
 
 dotenv.config();
 
