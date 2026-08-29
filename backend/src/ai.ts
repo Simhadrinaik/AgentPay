@@ -1,16 +1,14 @@
-import ollama from "ollama";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export async function generateAgentResponse(
   userMessage: string,
   productContext: string
 ) {
-  const response = await ollama.chat({
-    model: "llama3.2:3b",
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
 
-    messages: [
-      {
-        role: "system",
-        content: `You are AgentPay, an AI shopping assistant.
+  const prompt = `You are AgentPay, an AI shopping assistant.
 
 Rules:
 - Recommend ONLY products in the catalog.
@@ -21,26 +19,61 @@ Rules:
 - If multiple products match, compare them briefly.
 
 Catalog:
-${productContext}`,
-      },
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ],
+${productContext}
 
-    options: {
-      temperature: 0.1,
-      num_predict: 80,
-      top_p: 0.8,
-    },
-  });
+User request:
+${userMessage}`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 80,
+          topP: 0.8,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Gemini API error ${response.status}: ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  const reply =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+  if (!reply) {
+    throw new Error("Gemini returned an empty response");
+  }
 
   return {
     success: true,
-    reply: response.message.content.trim(),
+    reply,
   };
 }
+
+
 // =========================================================
 // AI CART ACTION DETECTION
 // =========================================================
@@ -117,12 +150,9 @@ export function detectCartAction(
   // FIND PRODUCT
   // =======================================================
 
-  const matchedProduct =
-    products.find((product) =>
-      text.includes(
-        product.name.toLowerCase()
-      )
-    );
+  const matchedProduct = products.find((product) =>
+    text.includes(product.name.toLowerCase())
+  );
 
   if (!matchedProduct) {
     return {
@@ -134,10 +164,7 @@ export function detectCartAction(
   // QUANTITY
   // =======================================================
 
-  const quantityMatch =
-    text.match(
-      /\b(\d+)\b/
-    );
+  const quantityMatch = text.match(/\b(\d+)\b/);
 
   const quantity = quantityMatch
     ? Number(quantityMatch[1])
