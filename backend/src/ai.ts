@@ -34,7 +34,7 @@ ${productContext}`;
         input: userMessage,
         system_instruction: systemInstruction,
         generation_config: {
-          max_total_tokens: 80,
+          max_tokens: 80,
         },
       }),
     }
