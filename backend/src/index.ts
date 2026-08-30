@@ -415,7 +415,7 @@ const startServer = async () => {
     );
 
     // =====================================================
-    // AI CART ACTION
+    // AI CART ACTION - CONFIRMATION FLOW
     // =====================================================
 
     app.post(
@@ -423,37 +423,77 @@ const startServer = async () => {
       async (request, reply) => {
         try {
           const userId = getAuthenticatedUserId(request);
-          if (!userId) return reply.code(401).send({ success: false, message: "Authentication required" });
 
-          const body = request.body as { message?: string };
-          const message = body.message?.trim();
-          if (!message) return reply.code(400).send({ success: false, message: "Message is required" });
+          if (!userId) {
+            return reply.code(401).send({
+              success: false,
+              message: "Authentication required",
+            });
+          }
+
+          const body = request.body as {
+            message?: string;
+            confirm?: boolean;
+            productId?: number;
+            quantity?: number;
+          };
+
+          const message = body.message?.trim() || "";
+
+          if (body.confirm === true) {
+            if (body.productId === undefined || !Number.isInteger(body.productId) || body.productId <= 0) {
+              return reply.code(400).send({ success: false, message: "Valid productId is required" });
+            }
+
+            const product = products.find((p) => p.id === body.productId);
+            if (!product) {
+              return reply.code(404).send({ success: false, message: "Product not found in catalog" });
+            }
+
+            const quantity = Math.max(1, Number(body.quantity ?? 1));
+            const result = await addToCart(userId, product.id, quantity);
+
+            if (!result.success) {
+              return reply.code(400).send({ success: false, action: "ADD", message: "Failed to add product to cart" });
+            }
+
+            return { success: true, confirmed: true, action: "ADD", product, quantity, message: `${product.name} added to your cart.`, cart: result };
+          }
+
+          if (!message) {
+            return reply.code(400).send({ success: false, message: "Message is required" });
+          }
 
           const action = detectCartAction(message, products);
 
-          if (action.type === "NONE") return { success: true, action: "NONE", message: "I couldn't understand the cart action." };
-          if (action.type === "VIEW") return { success: true, action: "VIEW", cart: await getCart(userId) };
-          if (action.type === "CLEAR") return { success: true, action: "CLEAR", message: "Your cart has been cleared.", cart: await clearCart(userId) };
+          if (action.type === "NONE") {
+            return { success: true, action: "NONE", message: "I couldn't understand the cart action." };
+          }
+
+          if (action.type === "VIEW") {
+            return { success: true, action: "VIEW", cart: await getCart(userId) };
+          }
+
+          if (action.type === "CLEAR") {
+            return { success: true, action: "CLEAR", requiresConfirmation: true, message: "Do you want me to clear your cart?" };
+          }
 
           if (action.type === "ADD") {
-            const result = await addToCart(userId, action.productId, action.quantity);
-            if (!result.success) return reply.code(400).send({ success: false, action: "ADD", message: "Failed to add product to cart" });
-            const product = products.find(p => p.id === action.productId);
-            return { success: true, action: "ADD", product, quantity: action.quantity, message: product ? `${product.name} added to your cart.` : "Product added to your cart.", cart: result };
+            const product = products.find((p) => p.id === action.productId);
+            if (!product) {
+              return { success: false, action: "NONE", message: "Product not found in catalog." };
+            }
+            return { success: true, action: "ADD", requiresConfirmation: true, product, quantity: action.quantity, message: `I found ${product.name} for ₹${product.price}. Do you want me to add it to your cart?` };
           }
 
           if (action.type === "REMOVE") {
-            const result = await removeFromCart(userId, action.productId);
-            if (!result.success) return reply.code(400).send({ success: false, action: "REMOVE", message: "Failed to remove product from cart" });
-            const product = products.find(p => p.id === action.productId);
-            return { success: true, action: "REMOVE", product, message: product ? `${product.name} removed from your cart.` : "Product removed from your cart.", cart: result };
+            const product = products.find((p) => p.id === action.productId);
+            return { success: true, action: "REMOVE", requiresConfirmation: true, product, message: product ? `Do you want me to remove ${product.name} from your cart?` : "Do you want me to remove this product?" };
           }
 
           if (action.type === "UPDATE") {
-            const result = await updateCartQuantity(userId, action.productId, action.quantity);
-            if (!result.success) return reply.code(400).send({ success: false, action: "UPDATE", message: "Failed to update cart quantity" });
-            const product = products.find(p => p.id === action.productId);
-            return { success: true, action: "UPDATE", product, quantity: action.quantity, message: product ? `${product.name} quantity updated to ${action.quantity}.` : "Cart quantity updated.", cart: result };
+            const product = products.find((p) => p.id === action.productId);
+            return { success: true, action: "UPDATE", requiresConfirmation: true, product, quantity: action.quantity, message: product ? `Do you want to change ${product.name} quantity to ${action.quantity}?` : "Do you want to update the quantity?" };
           }
 
           return { success: true, action: "NONE" };
